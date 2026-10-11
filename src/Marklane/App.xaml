@@ -4,6 +4,18 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Application.Resources>
         <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="MarklaneChromeBrush" Color="#F3F3F3" />
+                    <SolidColorBrush x:Key="MarklaneSidebarBrush" Color="#F7F7F5" />
+                    <SolidColorBrush x:Key="MarklaneDividerBrush" Color="#E2E4DF" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="MarklaneChromeBrush" Color="#2D3237" />
+                    <SolidColorBrush x:Key="MarklaneSidebarBrush" Color="#30353A" />
+                    <SolidColorBrush x:Key="MarklaneDividerBrush" Color="#4A5159" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>

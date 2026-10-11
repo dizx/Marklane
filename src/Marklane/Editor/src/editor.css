@@ -7,16 +7,34 @@
   --line: #e5e6de;
   --code: #f0f1eb;
   --selection: #dce7d8;
+  --quote-border: #9aaf93;
+  --syntax-keyword: #803fa0;
+  --syntax-type: #006f69;
+  --syntax-definition: #245caa;
+  --syntax-string: #a23b36;
+  --syntax-literal: #955014;
+  --syntax-comment: #936019;
+  --syntax-meta: #6f627d;
+  --syntax-attribute: #7a4c19;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --paper: #202420;
-  --ink: #dbe0d6;
-  --muted: #969e92;
-  --accent: #a2c3a2;
-  --line: #383f36;
-  --code: #292f28;
-  --selection: #3c503c;
+  --paper: #363b40;
+  --ink: #c5cbd2;
+  --muted: #a0a8b1;
+  --accent: #a9c9f0;
+  --line: #4a5159;
+  --code: #303030;
+  --selection: #4b6076;
+  --quote-border: #748598;
+  --syntax-keyword: #d6a3e7;
+  --syntax-type: #4de0bb;
+  --syntax-definition: #91a7ff;
+  --syntax-string: #ff857a;
+  --syntax-literal: #f5b773;
+  --syntax-comment: #f5a35c;
+  --syntax-meta: #b4a5d0;
+  --syntax-attribute: #e6c38a;
 }
 * { box-sizing: border-box; }
 html, body, #editor { height: 100%; margin: 0; }
@@ -39,9 +57,22 @@ body { background: var(--paper); color: var(--ink); }
 .md-emphasis { font-style: italic; }
 .md-strike { text-decoration: line-through; opacity: .65; }
 .md-inline-code { font-family: "Cascadia Code", Consolas, monospace; font-size: .88em; background: var(--code); border-radius: 4px; padding: 2px 3px; }
-.cm-editor .md-code-line { background: var(--code); font-family: "Cascadia Code", Consolas, monospace; font-size: 14px; padding: 0 18px; }
-.cm-editor .md-quote { border-left: 3px solid #9aaf93; padding-left: 20px; color: var(--accent); font-style: italic; }
-.md-link { color: var(--accent); text-decoration: underline; text-decoration-color: #9aaf93; text-underline-offset: 3px; }
+.cm-editor .md-code-line { background: var(--code); font-family: "Cascadia Code", Consolas, monospace; font-size: 14px; line-height: 1.8; padding: 0 24px; tab-size: 4; }
+.syntax-keyword { color: var(--syntax-keyword); }
+.syntax-type { color: var(--syntax-type); }
+.syntax-definition { color: var(--syntax-definition); }
+.syntax-string { color: var(--syntax-string); }
+.syntax-literal { color: var(--syntax-literal); }
+.syntax-comment { color: var(--syntax-comment); }
+.syntax-meta { color: var(--syntax-meta); }
+.syntax-tag { color: var(--syntax-keyword); }
+.syntax-attribute { color: var(--syntax-attribute); }
+.syntax-invalid { text-decoration: underline wavy var(--syntax-string); }
+.syntax-heading { color: var(--accent); font-weight: 600; }
+.syntax-link { color: var(--accent); }
+.syntax-markup { color: var(--muted); }
+.cm-editor .md-quote { border-left: 3px solid var(--quote-border); padding-left: 20px; color: var(--accent); font-style: italic; }
+.md-link { color: var(--accent); text-decoration: underline; text-decoration-color: var(--quote-border); text-underline-offset: 3px; }
 .md-bullet { color: var(--accent); display: inline-block; text-align: center; min-width: 16px; }
 .md-task { accent-color: var(--accent); width: 15px; height: 15px; margin: 0 5px 0 0; vertical-align: middle; cursor: pointer; }
 .md-rendered-block { padding: 8px 4px; cursor: text; }
@@ -51,10 +82,10 @@ body { background: var(--paper); color: var(--ink); }
 .md-rendered-block a { color: var(--accent); pointer-events: none; }
 .md-rendered-block hr { border: 0; border-top: 1px solid var(--line); margin: 20px 0; }
 .source-mode #editor .cm-content { max-width: none; padding: 30px 28px 40vh; font-family: "Cascadia Code", Consolas, monospace; font-size: 14px; }
-.cm-gutters { background: var(--paper); color: var(--muted); border: 0; padding-left: 12px; }
-.cm-activeLine { background: var(--code); }
-.cm-panels { background: var(--code); color: var(--ink); border-color: var(--line); font: 13px "Segoe UI", sans-serif; }
+#editor .cm-gutters { background: var(--paper); color: var(--muted); border: 0; padding-left: 12px; }
+#editor .cm-activeLine, #editor .cm-activeLineGutter { background: var(--code); }
+#editor .cm-panels { background: var(--code); color: var(--ink); border-color: var(--line); font: 13px "Segoe UI", sans-serif; }
 .cm-search { padding: 10px 20px !important; }
-.cm-textfield, .cm-button { background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; }
+#editor .cm-textfield, #editor .cm-button { background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; }
 .focus-mode #editor .cm-content { max-width: 790px; padding-top: 80px; }
 @media (max-width: 650px) { #editor .cm-content { padding: 30px 24px 40vh; } .md-h1 { font-size: 30px; } }

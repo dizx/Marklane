@@ -3,14 +3,18 @@ import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers, pl
 import { defaultKeymap, history, historyKeymap, undo, redo, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownKeymap } from "@codemirror/lang-markdown";
 import { GFM } from "@lezer/markdown";
-import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from "@codemirror/language";
+import { syntaxHighlighting, bracketMatching } from "@codemirror/language";
 import { search, searchKeymap, openSearchPanel } from "@codemirror/search";
 import { sourceState, livePreview, setSource } from "./live-preview.js";
 import { documentStats, wrapSelection } from "./markdown.js";
+import { codeLanguage, codeHighlightStyle, markdownHighlightStyle } from "./highlighting.js";
 
 const mode = new Compartment();
+const theme = new Compartment();
 let statsTimer;
 let source = false;
+let dark = false;
+const sourceExtensions = () => [lineNumbers(), highlightActiveLine(), syntaxHighlighting(markdownHighlightStyle)];
 const send = message => window.chrome?.webview?.postMessage(message);
 const hostCommand = command => { send({ type: "command", command }); return true; };
 const scheduleStats = () => {
@@ -75,11 +79,12 @@ function createState(text) {
   return EditorState.create({
     doc: text,
     extensions: [
-      markdown({ extensions: GFM }), history(), drawSelection(), bracketMatching(),
+      markdown({ extensions: GFM, codeLanguages: codeLanguage }), history(), drawSelection(), bracketMatching(),
+      syntaxHighlighting(codeHighlightStyle), theme.of(EditorView.theme({}, { dark })),
       EditorView.lineWrapping, keymap.of(bindings), search({ top: true }),
       placeholder("A new page. A fresh thought."),
       sourceState.init(() => source), livePreview,
-      mode.of(source ? [lineNumbers(), highlightActiveLine(), syntaxHighlighting(defaultHighlightStyle)] : []),
+      mode.of(source ? sourceExtensions() : []),
       EditorView.contentAttributes.of({ "aria-label": "Markdown document", spellcheck: "true" }),
       EditorView.updateListener.of(update => {
         if (update.docChanged) {
@@ -103,10 +108,14 @@ function receive(message) {
     case "source":
       source = message.enabled;
       document.body.classList.toggle("source-mode", source);
-      view.dispatch({ effects: [setSource.of(source), mode.reconfigure(source ? [lineNumbers(), highlightActiveLine(), syntaxHighlighting(defaultHighlightStyle)] : [])] });
+      view.dispatch({ effects: [setSource.of(source), mode.reconfigure(source ? sourceExtensions() : [])] });
       view.focus();
       break;
-    case "theme": document.documentElement.dataset.theme = message.dark ? "dark" : "light"; break;
+    case "theme":
+      dark = message.dark;
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+      view.dispatch({ effects: theme.reconfigure(EditorView.theme({}, { dark })) });
+      break;
     case "focus": document.body.classList.toggle("focus-mode", message.enabled); view.focus(); break;
     case "jump": {
       const position = Math.max(0, Math.min(message.position, view.state.doc.length));

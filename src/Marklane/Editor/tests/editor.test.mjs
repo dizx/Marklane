@@ -87,3 +87,99 @@ test("theme, focus and outline navigation preserve document and report real head
   assert.match(await page.locator("body").getAttribute("class"), /focus-mode/);
   assert.equal(await page.evaluate(() => window.marklane.getText()), sample);
 });
+
+const csharpSample = [
+  "# Night mode", "", "Readable notes, with color-coded code.", "", "```csharp",
+  "using System;", "", "namespace Marklane.Notes;", "",
+  "public sealed class Note", "{", "    // Keep your ideas close.",
+  '    private readonly string title = "A fresh thought";',
+  "    public int Count => 42;", "}", "```", "", "End."
+].join("\n");
+
+async function tokenColor(selector, text) {
+  const token = page.locator(selector).filter({ hasText: text }).first();
+  await token.waitFor();
+  return token.evaluate(element => getComputedStyle(element).color);
+}
+
+test("night mode renders readable C# tokens on a charcoal code block", async () => {
+  await page.evaluate(text => {
+    window.marklane.receive({ type: "theme", dark: true });
+    window.marklane.receive({ type: "load", text });
+  }, csharpSample);
+  assert.equal(await tokenColor(".md-code-line .syntax-keyword", /^using$/), "rgb(214, 163, 231)");
+  assert.equal(await tokenColor(".md-code-line .syntax-type", /^string$/), "rgb(77, 224, 187)");
+  assert.equal(await tokenColor(".md-code-line .syntax-definition", /^Note$/), "rgb(145, 167, 255)");
+  assert.equal(await tokenColor(".md-code-line .syntax-string", /A fresh thought/), "rgb(255, 133, 122)");
+  assert.equal(await tokenColor(".md-code-line .syntax-comment", /Keep your ideas/), "rgb(245, 163, 92)");
+  assert.equal(await tokenColor(".md-code-line .syntax-literal", /^42$/), "rgb(245, 183, 115)");
+  assert.equal(await page.locator("body").evaluate(element => getComputedStyle(element).backgroundColor), "rgb(54, 59, 64)");
+  assert.equal(await page.locator(".md-code-line").first().evaluate(element => getComputedStyle(element).backgroundColor), "rgb(48, 48, 48)");
+  assert.equal(await page.evaluate(() => window.marklane.getText()), csharpSample);
+  if (process.env.MARKLANE_NIGHT_SCREENSHOT) await page.screenshot({ path: process.env.MARKLANE_NIGHT_SCREENSHOT });
+});
+
+test("theme and source switches recolor code without changing text or undo history", async () => {
+  await page.evaluate(text => window.marklane.receive({ type: "load", text }), csharpSample);
+  const lightKeyword = await tokenColor(".syntax-keyword", /^using$/);
+  assert.equal(lightKeyword, "rgb(128, 63, 160)");
+  await page.evaluate(() => window.marklane.receive({ type: "theme", dark: true }));
+  const darkKeyword = await tokenColor(".syntax-keyword", /^using$/);
+  assert.notEqual(darkKeyword, lightKeyword);
+  await page.evaluate(() => window.marklane.receive({ type: "source", enabled: true }));
+  assert.equal(await tokenColor(".syntax-keyword", /^using$/), darkKeyword);
+  assert.equal(await page.locator(".cm-gutters").evaluate(element => getComputedStyle(element).backgroundColor), "rgb(54, 59, 64)");
+  await page.keyboard.press("Control+End");
+  await page.keyboard.insertText(" More.");
+  await page.evaluate(() => {
+    window.marklane.receive({ type: "source", enabled: false });
+    window.marklane.receive({ type: "theme", dark: false });
+  });
+  assert.equal(await tokenColor(".syntax-keyword", /^using$/), lightKeyword);
+  await page.keyboard.press("Control+z");
+  assert.equal(await page.evaluate(() => window.marklane.getText()), csharpSample);
+});
+
+test("C# aliases, common languages and unknown labels are handled offline", async () => {
+  const requests = [];
+  page.on("request", request => requests.push(request.url()));
+  for (const label of ["cs", "c#", "CSHARP"]) {
+    const text = `Notes.\n\n\`\`\`${label}\npublic class Example {}\n\`\`\``;
+    await page.evaluate(text => window.marklane.receive({ type: "load", text }), text);
+    await page.locator(".md-code-line .syntax-keyword").first().waitFor();
+    assert.equal(await page.evaluate(() => window.marklane.getText()), text);
+  }
+  for (const [label, code, selector] of [
+    ["js", "const answer = 42;", ".syntax-keyword"],
+    ["typescript", "const answer: number = 42;", ".syntax-keyword"],
+    ["json", '{"answer": 42}', ".syntax-literal"],
+    ["python", "def greet(): return 'Hello'", ".syntax-keyword"],
+    ["sql", "SELECT * FROM notes;", ".syntax-keyword"],
+    ["powershell", "# A PowerShell comment", ".syntax-comment"]
+  ]) {
+    const text = `Notes.\n\n\`\`\`${label}\n${code}\n\`\`\``;
+    await page.evaluate(text => window.marklane.receive({ type: "load", text }), text);
+    await page.locator(`.md-code-line ${selector}`).first().waitFor();
+    assert.equal(await page.evaluate(() => window.marklane.getText()), text);
+  }
+  for (const label of ["", "not-csharp"]) {
+    const text = `Notes.\n\n\`\`\`${label}\npublic class Example { string text = "literal"; }\n\`\`\``;
+    await page.evaluate(text => window.marklane.receive({ type: "load", text }), text);
+    assert.equal(await page.locator(".md-code-line .syntax-keyword, .md-code-line .syntax-string").count(), 0);
+    assert.equal(await page.evaluate(() => window.marklane.getText()), text);
+  }
+  assert.deepEqual(requests, [], "Language parsers must be bundled; no runtime downloads");
+});
+
+test("typing into a C# fence updates highlighting and supports undo", async () => {
+  const text = "Notes.\n\n```cs\n\n```";
+  await page.evaluate(text => {
+    window.marklane.receive({ type: "load", text });
+    window.marklane.receive({ type: "jump", position: text.lastIndexOf("```") - 1 });
+  }, text);
+  await page.keyboard.insertText("public class NewNote {}");
+  await page.locator(".md-code-line .syntax-definition").filter({ hasText: /^NewNote$/ }).waitFor();
+  assert.match(await page.evaluate(() => window.marklane.getText()), /public class NewNote/);
+  await page.keyboard.press("Control+z");
+  assert.equal(await page.evaluate(() => window.marklane.getText()), text);
+});
