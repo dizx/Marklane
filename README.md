@@ -22,6 +22,10 @@ The welcome page is editable and starts unmodified. It only asks to save after y
 
 The list survives restarts. **Clear recent files** clears history without deleting documents. If a listed file has been moved or deleted, attempting to open it removes the stale entry and keeps the current document intact. Switching documents still asks about genuinely unsaved edits.
 
+### Focus mode
+
+Choose **View > Focus mode**, click the focus button, or press **Ctrl+Shift+F** to hide the menus, toolbar, outline, and status bar. The writing canvas expands into the freed space. Press **Escape** or **Ctrl+Shift+F** again to restore the controls and your previous outline setting. Editing and save shortcuts continue to work while focused. If search is open, Escape closes search first.
+
 ### Night mode and code blocks
 
 Choose **View > Night mode** or click the moon/sun button in the toolbar. The charcoal palette applies to the editor, sidebar, window controls, and search panel. Your choice is remembered for the next launch.
@@ -123,6 +127,7 @@ The editable icon artwork is in `src/Marklane/Assets/Marklane.svg` and `Marklane
 | Ctrl+S / Ctrl+Shift+S | Save / save as |
 | Ctrl+/ | Live preview / source |
 | Ctrl+Shift+F | Focus mode |
+| Escape | Exit focus mode (closes search first) |
 | Ctrl+B / Ctrl+I / Ctrl+K | Bold / italic / link |
 | Ctrl+F | Find / replace |
 | Ctrl+Z / Ctrl+Y | Undo / redo |
