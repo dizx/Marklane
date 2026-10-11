@@ -11,6 +11,23 @@ public sealed class DocumentTests : IDisposable
     public DocumentTests() => Directory.CreateDirectory(directory);
     public void Dispose() => Directory.Delete(directory, true);
 
+    [Fact]
+    public void InitialWelcomeTextIsCleanAndOnlyEditsRequireSaving()
+    {
+        var document = new MarkdownDocument();
+        document.New("# Welcome\r\n\r\nStart writing.\r\n");
+        var initialText = document.Text;
+        Assert.Null(document.FilePath);
+        Assert.False(document.IsDirty);
+        document.Text += "My note";
+        Assert.True(document.IsDirty);
+        document.Text = initialText;
+        Assert.False(document.IsDirty);
+        document.New();
+        Assert.Equal("", document.Text);
+        Assert.False(document.IsDirty);
+    }
+
     [Theory]
     [InlineData(false, "\n")]
     [InlineData(false, "\r\n")]
@@ -50,7 +67,8 @@ public sealed class DocumentTests : IDisposable
         var path = Path.Combine(directory, "first.md");
         var other = Path.Combine(directory, "second.md");
         var document = new MarkdownDocument();
-        document.New("first\r\n");
+        document.New();
+        document.Text = "first\n";
         Assert.True(document.IsDirty);
         await document.SaveAsync(path);
         document.Text = "changed\n";
@@ -69,7 +87,8 @@ public sealed class DocumentTests : IDisposable
     public async Task FailedOpenAndSavePreserveCurrentWork()
     {
         var document = new MarkdownDocument();
-        document.New("Keep this");
+        document.New();
+        document.Text = "Keep this";
         var invalid = Path.Combine(directory, "invalid.md");
         await File.WriteAllBytesAsync(invalid, [0xFF, 0xFF, 0xFF]);
         await Assert.ThrowsAsync<DecoderFallbackException>(() => document.OpenAsync(invalid));

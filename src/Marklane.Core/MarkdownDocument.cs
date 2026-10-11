@@ -20,7 +20,7 @@ public sealed class MarkdownDocument
     {
         FilePath = null;
         Text = Normalize(text);
-        savedText = "";
+        savedText = Text;
         encoding = new UTF8Encoding(false, true);
         newline = "\r\n";
     }
