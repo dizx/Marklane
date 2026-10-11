@@ -9,7 +9,10 @@
 #ifndef InstallerOutputDir
   #define InstallerOutputDir SourcePath + "..\artifacts\installer"
 #endif
-#define AppVersion GetVersionNumbersString(PublishDir + "\Marklane.exe")
+#define AppFileVersion GetVersionNumbersString(PublishDir + "\Marklane.exe")
+#define AppVersion Copy(AppFileVersion, 1, RPos(".", AppFileVersion) - 1)
+#define AppPublisher GetStringFileInfo(PublishDir + "\Marklane.exe", "CompanyName")
+#define AppCopyright GetStringFileInfo(PublishDir + "\Marklane.exe", "LegalCopyright")
 
 [Setup]
 ; Keep this ID stable so subsequent releases upgrade the existing installation.
@@ -17,6 +20,12 @@ AppId={{92F02604-9167-4F7C-9FA7-AB16788F6E61}
 AppName=Marklane
 AppVersion={#AppVersion}
 AppVerName=Marklane {#AppVersion}
+AppPublisher={#AppPublisher}
+AppCopyright={#AppCopyright}
+VersionInfoVersion={#AppVersion}
+VersionInfoTextVersion={#AppVersion}
+VersionInfoProductVersion={#AppVersion}
+VersionInfoProductTextVersion={#AppVersion}
 DefaultDirName={autopf}\Marklane
 DisableProgramGroupPage=yes
 PrivilegesRequired=admin
@@ -33,12 +42,14 @@ UninstallDisplayIcon={app}\Marklane.exe
 CloseApplications=yes
 RestartApplications=no
 SetupLogging=yes
+ChangesAssociations=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"
+Name: "markdownfiles"; Description: "Register Marklane for Markdown files (.md, .markdown, .mdown)"; GroupDescription: "File associations:"
 
 [Files]
 Source: "{#PublishDir}\*"; DestDir: "{app}"; Excludes: "*.pdb"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -49,10 +60,41 @@ Source: "{#PrerequisitesDir}\MicrosoftEdgeWebview2Setup.exe"; Flags: dontcopy
 Name: "{commonprograms}\Marklane"; Filename: "{app}\Marklane.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Marklane.exe"; Comment: "Write and edit Markdown"
 Name: "{commondesktop}\Marklane"; Filename: "{app}\Marklane.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Marklane.exe"; Comment: "Write and edit Markdown"; Tasks: desktopicon
 
+[Registry]
+; Register a handler without replacing Windows' protected per-user default choice.
+Root: HKLM; Subkey: "Software\Classes\Marklane.Markdown"; ValueType: string; ValueData: "Markdown document"; Flags: uninsdeletekey; Tasks: markdownfiles
+Root: HKLM; Subkey: "Software\Classes\Marklane.Markdown\DefaultIcon"; ValueType: string; ValueData: """{app}\Assets\MarklaneDocument.ico"",0"; Tasks: markdownfiles
+Root: HKLM; Subkey: "Software\Classes\Marklane.Markdown\shell\open\command"; ValueType: string; ValueData: """{app}\Marklane.exe"" ""%1"""; Tasks: markdownfiles
+#sub RegisterMarkdownExtension
+Root: HKLM; Subkey: "Software\Classes\{#MarkdownExtension}\OpenWithProgids"; ValueType: string; ValueName: "Marklane.Markdown"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: markdownfiles
+Root: HKLM; Subkey: "Software\Marklane\Capabilities\FileAssociations"; ValueType: string; ValueName: "{#MarkdownExtension}"; ValueData: "Marklane.Markdown"; Tasks: markdownfiles
+#endsub
+#define MarkdownExtension ".md"
+#emit RegisterMarkdownExtension
+#define MarkdownExtension ".markdown"
+#emit RegisterMarkdownExtension
+#define MarkdownExtension ".mdown"
+#emit RegisterMarkdownExtension
+Root: HKLM; Subkey: "Software\Marklane\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "Marklane"; Flags: uninsdeletekey; Tasks: markdownfiles
+Root: HKLM; Subkey: "Software\Marklane\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "Write and view Markdown documents with Marklane."; Tasks: markdownfiles
+Root: HKLM; Subkey: "Software\Marklane\Capabilities"; ValueType: string; ValueName: "ApplicationIcon"; ValueData: """{app}\Marklane.exe"",0"; Tasks: markdownfiles
+Root: HKLM; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "Marklane"; ValueData: "Software\Marklane\Capabilities"; Flags: uninsdeletevalue; Tasks: markdownfiles
+
 [Run]
+Filename: "{code:DefaultAppsUri}"; Description: "Choose Marklane as your default Markdown editor in Windows Settings"; Flags: shellexec postinstall skipifsilent unchecked runasoriginaluser; Tasks: markdownfiles
 Filename: "{app}\Marklane.exe"; Description: "Launch Marklane"; Flags: nowait postinstall skipifsilent runasoriginaluser
 
 [Code]
+function DefaultAppsUri(Param: String): String;
+var
+    Version: TWindowsVersion;
+begin
+    Result := 'ms-settings:defaultapps';
+    GetWindowsVersionEx(Version);
+    if Version.Build >= 22000 then
+        Result := Result + '?registeredAppMachine=Marklane';
+end;
+
 function MachineWebView2Installed: Boolean;
 var
     Version: String;

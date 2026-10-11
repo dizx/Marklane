@@ -26,6 +26,7 @@
     <Content Include="Editor/dist/THIRD-PARTY-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" Link="Editor/THIRD-PARTY-NOTICES.txt" />
     <Content Update="Assets/Welcome.md" CopyToOutputDirectory="PreserveNewest" />
     <Content Update="Assets/Marklane.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Update="Assets/MarklaneDocument.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <EditorBuildInput Include="Editor/src/**/*;Editor/build.mjs;Editor/package.json;Editor/package-lock.json" />

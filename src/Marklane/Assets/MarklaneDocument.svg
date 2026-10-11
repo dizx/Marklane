@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>Marklane Markdown document</title>
+  <path d="M52 12h100l64 64v156a12 12 0 0 1-12 12H52a12 12 0 0 1-12-12V24a12 12 0 0 1 12-12z" fill="#f6f3eb" stroke="#183b45" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M152 12v52a12 12 0 0 0 12 12h52" fill="#6cdbbd" stroke="#183b45" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M65 174v-74h22l41 46 41-46h22v74h-24v-38l-39 43-39-43v38z" fill="#183b45"/>
+  <rect x="65" y="198" width="126" height="12" rx="6" fill="#318b78"/>
+</svg>
