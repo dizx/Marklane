@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <Version>1.0.1</Version>
+    <FileVersion>$(Version)</FileVersion>
+    <InformationalVersion>$(Version)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Authors>Morten Aasheim</Authors>
+    <Company>Morten Aasheim</Company>
+    <Product>Marklane</Product>
+    <Copyright>Copyright (c) 2026 Morten Aasheim</Copyright>
+  </PropertyGroup>
+</Project>

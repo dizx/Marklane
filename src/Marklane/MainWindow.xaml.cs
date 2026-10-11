@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Reflection;
 using System.Text.Json;
 using Marklane.Core;
 using Microsoft.UI.Windowing;
@@ -17,10 +18,16 @@ public sealed partial class MainWindow : Window
     private readonly ObservableCollection<HeadingItem> headings = [];
     private bool ready, busy, allowClose, sourceMode, focusMode;
     private bool showOutline = true;
-    private readonly string settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Marklane", "theme.txt");
+    private readonly string appDataDirectory = Environment.GetEnvironmentVariable("MARKLANE_DATA_DIRECTORY") is { Length: > 0 } configuredDirectory
+        ? Path.GetFullPath(configuredDirectory)
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Marklane");
+    private readonly string settingsPath;
+    private readonly RecentFilesStore recentFiles;
 
     public MainWindow()
     {
+        settingsPath = Path.Combine(appDataDirectory, "theme.txt");
+        recentFiles = new RecentFilesStore(Path.Combine(appDataDirectory, "recent-files.json"));
         InitializeComponent();
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "Marklane.ico"));
         ExtendsContentIntoTitleBar = true;
@@ -28,15 +35,35 @@ public sealed partial class MainWindow : Window
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1200, 860));
         AppWindow.Closing += OnClosing;
         OutlineList.ItemsSource = headings;
-        Root.RequestedTheme = File.Exists(settingsPath) && File.ReadAllText(settingsPath) == "dark"
-            ? ElementTheme.Dark : ElementTheme.Light;
+        ApplyTheme(File.Exists(settingsPath) && File.ReadAllText(settingsPath) == "dark");
+    }
+
+    private void ApplyTheme(bool dark)
+    {
+        Root.RequestedTheme = dark ? ElementTheme.Dark : ElementTheme.Light;
+        NightModeMenu.IsChecked = dark;
+        ThemeIcon.Glyph = dark ? "\uE706" : "\uE708";
+        var label = dark ? "Switch to light mode" : "Switch to night mode";
+        ToolTipService.SetToolTip(ThemeButton, label);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(ThemeButton, label);
+
+        var foreground = dark ? Windows.UI.Color.FromArgb(255, 197, 203, 210) : Windows.UI.Color.FromArgb(255, 52, 58, 54);
+        AppWindow.TitleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
+        AppWindow.TitleBar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
+        AppWindow.TitleBar.ButtonForegroundColor = foreground;
+        AppWindow.TitleBar.ButtonHoverForegroundColor = foreground;
+        AppWindow.TitleBar.ButtonHoverBackgroundColor = dark ? Windows.UI.Color.FromArgb(255, 69, 76, 84) : Windows.UI.Color.FromArgb(255, 226, 228, 223);
+        AppWindow.TitleBar.ButtonInactiveForegroundColor = Windows.UI.Color.FromArgb(255, 145, 153, 162);
+        Send(new { type = "theme", dark });
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         try
         {
-            var dataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Marklane", "WebView2");
+            await recentFiles.LoadAsync();
+            RefreshRecentFilesMenu();
+            var dataDirectory = Path.Combine(appDataDirectory, "WebView2");
             var environment = await CoreWebView2Environment.CreateWithOptionsAsync(null, dataDirectory, new CoreWebView2EnvironmentOptions());
             await Editor.EnsureCoreWebView2Async(environment);
             Editor.CoreWebView2.SetVirtualHostNameToFolderMapping("marklane.local", Path.Combine(AppContext.BaseDirectory, "Editor"), CoreWebView2HostResourceAccessKind.DenyCors);
@@ -54,7 +81,10 @@ public sealed partial class MainWindow : Window
             Editor.CoreWebView2.WebMessageReceived += OnEditorMessage;
             var argument = Environment.GetCommandLineArgs().Skip(1).FirstOrDefault();
             if (argument is not null && File.Exists(argument))
+            {
                 await document.OpenAsync(argument);
+                await RecordRecentFileAsync(argument);
+            }
             else
                 document.New(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Assets", "Welcome.md")));
             Editor.Source = new Uri(EditorUrl);
@@ -78,8 +108,8 @@ public sealed partial class MainWindow : Window
                 case "ready":
                     ready = true;
                     LoadingPanel.Visibility = Visibility.Collapsed;
+                    ApplyTheme(Root.RequestedTheme == ElementTheme.Dark);
                     SendDocument();
-                    Send(new { type = "theme", dark = Root.RequestedTheme == ElementTheme.Dark });
                     break;
                 case "change":
                     document.Text = root.GetProperty("text").GetString() ?? "";
@@ -124,26 +154,33 @@ public sealed partial class MainWindow : Window
         if (sender is FrameworkElement { Tag: string command }) await RunCommandAsync(command);
     }
 
-    private async Task RunCommandAsync(string command)
+    private async Task RunCommandAsync(string command, string? recentPath = null)
     {
-        if (!ready || busy) return;
+        if (busy || (!ready && command != "about")) return;
         busy = true;
         try
         {
             switch (command)
             {
+                case "about": await ShowAboutAsync(); break;
                 case "new":
                     await SynchronizeAsync();
                     if (await ConfirmDiscardAsync()) { document.New(); SendDocument(); }
                     break;
                 case "open":
-                    await SynchronizeAsync();
-                    if (!await ConfirmDiscardAsync()) break;
                     var picker = new FileOpenPicker();
                     InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
                     foreach (var extension in new[] { ".md", ".markdown", ".mdown", ".txt" }) picker.FileTypeFilter.Add(extension);
                     var file = await picker.PickSingleFileAsync();
-                    if (file is not null) { await document.OpenAsync(file.Path); SendDocument(); }
+                    if (file is not null) await SwitchToFileAsync(file.Path);
+                    break;
+                case "openRecent":
+                    if (recentPath is not null) await SwitchToFileAsync(recentPath, fromRecentFiles: true);
+                    break;
+                case "clearRecent":
+                    var cleared = await recentFiles.ClearAsync();
+                    RefreshRecentFilesMenu();
+                    if (!cleared) SaveStatus.Text = "Recent files could not be cleared on disk";
                     break;
                 case "save": await SaveAsync(false); break;
                 case "saveAs": await SaveAsync(true); break;
@@ -160,8 +197,7 @@ public sealed partial class MainWindow : Window
                     Send(new { type = "focus", enabled = focusMode });
                     break;
                 case "theme":
-                    Root.RequestedTheme = Root.RequestedTheme == ElementTheme.Dark ? ElementTheme.Light : ElementTheme.Dark;
-                    Send(new { type = "theme", dark = Root.RequestedTheme == ElementTheme.Dark });
+                    ApplyTheme(Root.RequestedTheme != ElementTheme.Dark);
                     Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
                     await File.WriteAllTextAsync(settingsPath, Root.RequestedTheme == ElementTheme.Dark ? "dark" : "light");
                     break;
@@ -170,6 +206,65 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception error) { await ShowErrorAsync(error); }
         finally { busy = false; }
+    }
+
+    private async Task SwitchToFileAsync(string path, bool fromRecentFiles = false)
+    {
+        await SynchronizeAsync();
+        if (!await ConfirmDiscardAsync()) return;
+        try
+        {
+            await document.OpenAsync(path);
+        }
+        catch (Exception error) when (fromRecentFiles && (error is FileNotFoundException or DirectoryNotFoundException))
+        {
+            await recentFiles.RemoveAsync(path);
+            RefreshRecentFilesMenu();
+            throw;
+        }
+        SendDocument();
+        await RecordRecentFileAsync(path);
+    }
+
+    private async Task RecordRecentFileAsync(string path)
+    {
+        var saved = await recentFiles.RecordAsync(path);
+        RefreshRecentFilesMenu();
+        if (!saved) SaveStatus.Text = "Document ready · Recent files could not be saved";
+    }
+
+    private void RefreshRecentFilesMenu()
+    {
+        RecentFilesMenu.Items.Clear();
+        if (recentFiles.Files.Count == 0)
+        {
+            RecentFilesMenu.Items.Add(new MenuFlyoutItem { Text = "No recent files", IsEnabled = false });
+            return;
+        }
+        for (var index = 0; index < recentFiles.Files.Count; index++)
+        {
+            var path = recentFiles.Files[index];
+            var item = new MenuFlyoutItem
+            {
+                Text = $"{Path.GetFileName(path)} — {Path.GetDirectoryName(path)}",
+                Tag = path,
+                MaxWidth = 600
+            };
+            ToolTipService.SetToolTip(item, path);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(item, $"Open recent file {path}");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(item, $"RecentFile{index}");
+            item.Click += OnRecentFileClick;
+            RecentFilesMenu.Items.Add(item);
+        }
+        RecentFilesMenu.Items.Add(new MenuFlyoutSeparator());
+        var clear = new MenuFlyoutItem { Text = "Clear recent files", Tag = "clearRecent" };
+        clear.Click += OnCommand;
+        RecentFilesMenu.Items.Add(clear);
+    }
+
+    private async void OnRecentFileClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string path }) await RunCommandAsync("openRecent", path);
     }
 
     // Flush the current editor snapshot before save/close, including edits whose messages are still queued.
@@ -194,6 +289,7 @@ public sealed partial class MainWindow : Window
         }
         await document.SaveAsync(path);
         UpdateStatus();
+        await RecordRecentFileAsync(path);
         return true;
     }
 
@@ -249,6 +345,23 @@ public sealed partial class MainWindow : Window
     private void OnHeadingClick(object sender, ItemClickEventArgs e)
     {
         if (e.ClickedItem is HeadingItem heading) Send(new { type = "jump", position = heading.Position });
+    }
+
+    private async Task ShowAboutAsync()
+    {
+        var assembly = typeof(App).Assembly;
+        var version = assembly.GetName().Version!.ToString(3);
+        var author = assembly.GetCustomAttribute<AssemblyCompanyAttribute>()!.Company;
+        var copyright = assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()!.Copyright;
+        await new ContentDialog
+        {
+            XamlRoot = Root.XamlRoot,
+            RequestedTheme = Root.RequestedTheme,
+            Title = "About Marklane",
+            Content = $"Version {version}\n\nA quiet Markdown editor for Windows.\n\nCreated by {author}\n{copyright}",
+            CloseButtonText = "Close",
+            DefaultButton = ContentDialogButton.Close
+        }.ShowAsync();
     }
 
     private async Task ShowErrorAsync(Exception error)

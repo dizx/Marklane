@@ -9,13 +9,14 @@ import assert from "node:assert/strict";
 const executable = resolve(process.argv[2] || "../bin/x64/Debug/net10.0-windows10.0.19041.0/win-x64/Marklane.exe");
 const directory = await mkdtemp(join(process.env.LOCALAPPDATA, "Temp", "opencode", "marklane-smoke-"));
 const documentPath = join(directory, "Smoke.md");
-await writeFile(documentPath, "# Native smoke\r\n\r\nOriginal text.\r\n");
+const initialText = "# Native smoke\r\n\r\nOriginal text.\r\n\r\n```csharp\r\npublic class Note { string title = \"Hello\"; }\r\n```\r\n";
+await writeFile(documentPath, initialText);
 const portServer = createServer();
 await new Promise(resolve => portServer.listen(0, "127.0.0.1", resolve));
 const port = portServer.address().port;
 await new Promise(resolve => portServer.close(resolve));
 const app = spawn(executable, [documentPath], {
-  env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`, WEBVIEW2_USER_DATA_FOLDER: join(directory, "profile") },
+  env: { ...process.env, MARKLANE_DATA_DIRECTORY: join(directory, "settings"), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`, WEBVIEW2_USER_DATA_FOLDER: join(directory, "profile") },
   stdio: "ignore"
 });
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -30,7 +31,32 @@ try {
   browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
   const page = browser.contexts()[0].pages()[0];
   await page.waitForFunction(() => window.marklane?.getText().includes("Original text."));
-  assert.equal(await page.evaluate(() => window.marklane.getText()), "# Native smoke\n\nOriginal text.\n");
+  assert.equal(await page.evaluate(() => window.marklane.getText()), initialText.replaceAll("\r\n", "\n"));
+  assert.deepEqual(JSON.parse(await readFile(join(directory, "settings", "recent-files.json"), "utf8")), [documentPath]);
+  await page.locator(".md-code-line .syntax-keyword").first().waitFor();
+  const automation = `Add-Type -AssemblyName UIAutomationClient; $root = [System.Windows.Automation.AutomationElement]::FromHandle((Get-Process -Id ${app.pid}).MainWindowHandle); `;
+  const originalTheme = await page.locator("html").getAttribute("data-theme");
+  const themePath = join(directory, "settings", "theme.txt");
+  try {
+    for (const desiredTheme of ["dark", "light"]) {
+      if (await page.locator("html").getAttribute("data-theme") !== desiredTheme) {
+        await page.evaluate(() => window.chrome.webview.postMessage({ type: "command", command: "theme" }));
+        await page.waitForFunction(theme => document.documentElement.dataset.theme === theme, desiredTheme);
+      }
+      const expectedColor = desiredTheme === "dark" ? "rgb(214, 163, 231)" : "rgb(128, 63, 160)";
+      assert.equal(await page.locator(".syntax-keyword").first().evaluate(element => getComputedStyle(element).color), expectedColor);
+      const names = powershell(automation + `$root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) | ForEach-Object { $_.Current.Name }`);
+      assert.ok(names.includes(desiredTheme === "dark" ? "Switch to light mode" : "Switch to night mode"));
+      assert.equal(await readFile(themePath, "utf8"), desiredTheme);
+      assert.equal(await page.evaluate(() => window.marklane.getText()), initialText.replaceAll("\r\n", "\n"));
+    }
+  } finally {
+    if (await page.locator("html").getAttribute("data-theme") !== originalTheme) {
+      await page.evaluate(() => window.chrome.webview.postMessage({ type: "command", command: "theme" }));
+      await page.waitForFunction(theme => document.documentElement.dataset.theme === theme, originalTheme);
+    }
+  }
+  console.log("PASS native night/light mode, code highlighting, toolbar state and saved theme");
   await page.locator(".cm-content").focus();
   await page.keyboard.press("Control+End");
   await page.keyboard.insertText("A native save.\n");
@@ -41,7 +67,7 @@ try {
     if (saved.includes("A native save.")) break;
     await delay(100);
   }
-  assert.equal(saved, "# Native smoke\r\n\r\nOriginal text.\r\nA native save.\r\n");
+  assert.equal(saved, initialText + "A native save.\r\n");
   console.log("PASS native open → edit → Ctrl+S → CRLF file on disk");
 
   await page.keyboard.press("Control+/");
@@ -52,7 +78,6 @@ try {
 
   await page.keyboard.insertText("Unsaved edit");
   powershell(`(Get-Process -Id ${app.pid}).CloseMainWindow() | Out-Null`);
-  const automation = `Add-Type -AssemblyName UIAutomationClient; $root = [System.Windows.Automation.AutomationElement]::FromHandle((Get-Process -Id ${app.pid}).MainWindowHandle); `;
   let prompt = false;
   for (let attempt = 0; attempt < 20; attempt++) {
     prompt = powershell(automation + `$root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) | ForEach-Object { $_.Current.Name }`).includes("Save your changes?");
