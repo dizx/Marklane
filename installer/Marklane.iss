@@ -65,9 +65,14 @@ Name: "{commondesktop}\Marklane"; Filename: "{app}\Marklane.exe"; WorkingDir: "{
 Root: HKLM; Subkey: "Software\Classes\Marklane.Markdown"; ValueType: string; ValueData: "Markdown document"; Flags: uninsdeletekey; Tasks: markdownfiles
 Root: HKLM; Subkey: "Software\Classes\Marklane.Markdown\DefaultIcon"; ValueType: string; ValueData: """{app}\Assets\MarklaneDocument.ico"",0"; Tasks: markdownfiles
 Root: HKLM; Subkey: "Software\Classes\Marklane.Markdown\shell\open\command"; ValueType: string; ValueData: """{app}\Marklane.exe"" ""%1"""; Tasks: markdownfiles
+; Windows uses this ProgID when Marklane.exe is chosen through "Open with > Choose another app".
+Root: HKLM; Subkey: "Software\Classes\Applications\Marklane.exe"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "Marklane"; Flags: uninsdeletekey; Tasks: markdownfiles
+Root: HKLM; Subkey: "Software\Classes\Applications\Marklane.exe\DefaultIcon"; ValueType: string; ValueData: """{app}\Assets\MarklaneDocument.ico"",0"; Tasks: markdownfiles
+Root: HKLM; Subkey: "Software\Classes\Applications\Marklane.exe\shell\open\command"; ValueType: string; ValueData: """{app}\Marklane.exe"" ""%1"""; Tasks: markdownfiles
 #sub RegisterMarkdownExtension
 Root: HKLM; Subkey: "Software\Classes\{#MarkdownExtension}\OpenWithProgids"; ValueType: string; ValueName: "Marklane.Markdown"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: markdownfiles
 Root: HKLM; Subkey: "Software\Marklane\Capabilities\FileAssociations"; ValueType: string; ValueName: "{#MarkdownExtension}"; ValueData: "Marklane.Markdown"; Tasks: markdownfiles
+Root: HKLM; Subkey: "Software\Classes\Applications\Marklane.exe\SupportedTypes"; ValueType: string; ValueName: "{#MarkdownExtension}"; ValueData: ""; Tasks: markdownfiles
 #endsub
 #define MarkdownExtension ".md"
 #emit RegisterMarkdownExtension
