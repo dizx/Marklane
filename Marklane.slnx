@@ -1,0 +1,14 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+  </Configurations>
+  <Folder Name="/src/">
+    <Project Path="src/Marklane.Core/Marklane.Core.csproj" />
+    <Project Path="src/Marklane/Marklane.csproj">
+      <Platform Project="x64" />
+    </Project>
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Marklane.Core.Tests/Marklane.Core.Tests.csproj" />
+  </Folder>
+</Solution>
