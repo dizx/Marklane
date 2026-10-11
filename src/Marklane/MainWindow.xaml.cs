@@ -192,9 +192,10 @@ public sealed partial class MainWindow : Window
                     break;
                 case "outline": showOutline = !showOutline; UpdateSidebar(); break;
                 case "focus":
-                    focusMode = !focusMode;
-                    UpdateSidebar();
-                    Send(new { type = "focus", enabled = focusMode });
+                    SetFocusMode(!focusMode);
+                    break;
+                case "exitFocus":
+                    SetFocusMode(false);
                     break;
                 case "theme":
                     ApplyTheme(Root.RequestedTheme != ElementTheme.Dark);
@@ -333,6 +334,17 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception error) { await ShowErrorAsync(error); }
         finally { busy = false; }
+    }
+
+    private void SetFocusMode(bool enabled)
+    {
+        focusMode = enabled;
+        Toolbar.Visibility = enabled ? Visibility.Collapsed : Visibility.Visible;
+        StatusBar.Visibility = enabled ? Visibility.Collapsed : Visibility.Visible;
+        StatusBarRow.Height = new GridLength(enabled ? 0 : 32);
+        UpdateSidebar();
+        Editor.Focus(FocusState.Programmatic);
+        Send(new { type = "focus", enabled });
     }
 
     private void UpdateSidebar()

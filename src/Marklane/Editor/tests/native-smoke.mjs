@@ -30,6 +30,7 @@ try {
   }
   browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
   const page = browser.contexts()[0].pages()[0];
+  page.setDefaultTimeout(15000);
   await page.waitForFunction(() => window.marklane?.getText().includes("Original text."));
   assert.equal(await page.evaluate(() => window.marklane.getText()), initialText.replaceAll("\r\n", "\n"));
   assert.deepEqual(JSON.parse(await readFile(join(directory, "settings", "recent-files.json"), "utf8")), [documentPath]);
@@ -57,6 +58,39 @@ try {
     }
   }
   console.log("PASS native night/light mode, code highlighting, toolbar state and saved theme");
+  const nativeNames = () => powershell(automation + `$root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) | ForEach-Object { $_.Current.Name }`).split(/\r?\n/);
+  const normalSize = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+  // Enter through the native button to verify keyboard focus follows the disappearing toolbar.
+  powershell(automation + `$button = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Focus mode'))); ([System.Windows.Automation.InvokePattern]$button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke();`);
+  await page.waitForFunction(() => document.body.classList.contains("focus-mode"));
+  await page.waitForFunction(size => innerWidth > size.width && innerHeight > size.height + 32, normalSize);
+  let names = nativeNames();
+  for (const hidden of ["File", "Edit", "View", "Outline", "Live preview", "UTF-8 · CRLF"])
+    assert.ok(!names.includes(hidden), `${hidden} must be hidden in focus mode`);
+  await page.keyboard.press("Control+f");
+  await page.locator(".cm-search").waitFor();
+  await page.keyboard.press("Escape");
+  await page.locator(".cm-search").waitFor({ state: "hidden" });
+  assert.ok(await page.locator("body").evaluate(element => element.classList.contains("focus-mode")), "Closing search must keep focus mode active");
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => !document.body.classList.contains("focus-mode"));
+  await page.waitForFunction(size => innerWidth === size.width && innerHeight === size.height, normalSize);
+  names = nativeNames();
+  for (const restored of ["File", "Outline"]) assert.ok(names.includes(restored), `${restored} must be restored: ${JSON.stringify(names)}`);
+  assert.equal(await page.evaluate(() => window.marklane.getText()), initialText.replaceAll("\r\n", "\n"));
+  console.log("PASS native focus hides chrome, expands canvas, and Escape restores controls after closing search");
+
+  await page.evaluate(() => window.chrome.webview.postMessage({ type: "command", command: "outline" }));
+  await page.waitForFunction(size => innerWidth > size.width, normalSize);
+  await page.keyboard.press("Control+Shift+F");
+  await page.waitForFunction(() => document.body.classList.contains("focus-mode"));
+  await page.keyboard.press("Control+Shift+F");
+  await page.waitForFunction(() => !document.body.classList.contains("focus-mode"));
+  assert.ok(!nativeNames().includes("Outline"), "Focus mode must preserve the hidden outline preference");
+  await page.evaluate(() => window.chrome.webview.postMessage({ type: "command", command: "outline" }));
+  await page.waitForFunction(size => innerWidth === size.width, normalSize);
+  await page.keyboard.press("Control+Shift+F");
+  await page.waitForFunction(() => document.body.classList.contains("focus-mode"));
   await page.locator(".cm-content").focus();
   await page.keyboard.press("Control+End");
   await page.keyboard.insertText("A native save.\n");
@@ -68,7 +102,13 @@ try {
     await delay(100);
   }
   assert.equal(saved, initialText + "A native save.\r\n");
-  console.log("PASS native open → edit → Ctrl+S → CRLF file on disk");
+  await page.keyboard.press("Control+Shift+F");
+  await page.waitForFunction(() => !document.body.classList.contains("focus-mode"));
+  await page.keyboard.press("Control+z");
+  assert.equal(await page.evaluate(() => window.marklane.getText()), initialText.replaceAll("\r\n", "\n"));
+  await page.keyboard.press("Control+y");
+  assert.equal(await page.evaluate(() => window.marklane.getText()), (initialText + "A native save.\r\n").replaceAll("\r\n", "\n"));
+  console.log("PASS focus toggle preserves outline preference, editing, Ctrl+S and undo history");
 
   await page.keyboard.press("Control+/");
   await page.waitForFunction(() => document.body.classList.contains("source-mode"));

@@ -8,7 +8,7 @@
             <RowDefinition Height="40" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="32" />
+            <RowDefinition x:Name="StatusBarRow" Height="32" />
         </Grid.RowDefinitions>
         <Grid x:Name="TitleBar" Padding="18,0,140,0">
             <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
@@ -71,7 +71,7 @@
                 <Button Tag="open" Click="OnCommand" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="Open document (Ctrl+O)" AutomationProperties.Name="Open document"><FontIcon Glyph="&#xE8E5;" FontSize="16" /></Button>
                 <Button Tag="save" Click="OnCommand" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="Save (Ctrl+S)" AutomationProperties.Name="Save"><FontIcon Glyph="&#xE74E;" FontSize="16" /></Button>
                 <ToggleButton x:Name="SourceButton" Content="&lt;/&gt;" Tag="source" Click="OnCommand" ToolTipService.ToolTip="Markdown source (Ctrl+/)" AutomationProperties.Name="Markdown source" />
-                <Button Tag="focus" Click="OnCommand" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="Focus mode (Ctrl+Shift+F)" AutomationProperties.Name="Focus mode"><FontIcon Glyph="&#xE740;" FontSize="16" /></Button>
+                <Button Tag="focus" Click="OnCommand" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="Focus mode (Ctrl+Shift+F); Escape to exit" AutomationProperties.Name="Focus mode"><FontIcon Glyph="&#xE740;" FontSize="16" /></Button>
                 <Button x:Name="ThemeButton" Tag="theme" Click="OnCommand" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="Switch to night mode" AutomationProperties.Name="Switch to night mode"><FontIcon x:Name="ThemeIcon" Glyph="&#xE708;" FontSize="16" /></Button>
             </StackPanel>
         </Grid>
@@ -100,7 +100,7 @@
                 </StackPanel>
             </Grid>
         </Grid>
-        <Grid Grid.Row="3" Padding="20,0" BorderBrush="{ThemeResource MarklaneDividerBrush}" BorderThickness="0,1,0,0">
+        <Grid x:Name="StatusBar" Grid.Row="3" Padding="20,0" BorderBrush="{ThemeResource MarklaneDividerBrush}" BorderThickness="0,1,0,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" Spacing="18" VerticalAlignment="Center">
                 <TextBlock x:Name="SaveStatus" Text="Ready" FontSize="11" Opacity="0.6" />

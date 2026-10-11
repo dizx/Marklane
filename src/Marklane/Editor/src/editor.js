@@ -69,10 +69,11 @@ const bindings = [
   { key: "Mod-o", run: () => hostCommand("open") },
   { key: "Mod-n", run: () => hostCommand("new") },
   { key: "Mod-/", run: () => hostCommand("source") },
-  { key: "Mod-Shift-f", run: () => hostCommand("focus") },
+  { key: "Mod-Shift-f", scope: "editor search-panel", run: () => hostCommand("focus") },
   { key: "Mod-b", run: commands.bold }, { key: "Mod-i", run: commands.italic },
   { key: "Mod-k", run: commands.link },
-  ...markdownKeymap, ...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab
+  ...markdownKeymap, ...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab,
+  { key: "Escape", run: () => document.body.classList.contains("focus-mode") && hostCommand("exitFocus") }
 ];
 
 function createState(text) {

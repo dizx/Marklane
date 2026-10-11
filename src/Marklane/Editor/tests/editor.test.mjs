@@ -88,6 +88,23 @@ test("theme, focus and outline navigation preserve document and report real head
   assert.equal(await page.evaluate(() => window.marklane.getText()), sample);
 });
 
+test("focus shortcuts reach the host and Escape closes search before exiting focus", async () => {
+  await page.keyboard.press("Control+Shift+F");
+  assert.ok(await page.evaluate(() => window.messages.some(message => message.command === "focus")));
+  await page.evaluate(() => {
+    window.messages.length = 0;
+    window.marklane.receive({ type: "focus", enabled: true });
+  });
+  await page.keyboard.press("Control+f");
+  await page.locator(".cm-search").waitFor();
+  await page.keyboard.press("Escape");
+  assert.equal(await page.locator(".cm-search").count(), 0);
+  assert.ok(await page.evaluate(() => !window.messages.some(message => message.command === "exitFocus")));
+  await page.keyboard.press("Escape");
+  assert.ok(await page.evaluate(() => window.messages.some(message => message.command === "exitFocus")));
+  assert.equal(await page.evaluate(() => window.marklane.getText()), sample);
+});
+
 const csharpSample = [
   "# Night mode", "", "Readable notes, with color-coded code.", "", "```csharp",
   "using System;", "", "namespace Marklane.Notes;", "",
