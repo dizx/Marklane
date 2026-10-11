@@ -2,16 +2,44 @@
 
 A quiet Markdown editor for Windows, written in **C# and WinUI 3**, with a live-preview writing surface.
 
+Copyright (c) 2026 Morten Aasheim.
+
 ## Features
 
 - **Live Markdown:** headings, emphasis, links, lists, quotes, code, interactive tasks, and tables on one writing surface.
 - **Source when you need it:** active lines reveal their syntax; source mode shows the whole document as Markdown.
-- **Native Windows controls:** file pickers, menus, document outline, and unsaved-change dialogs.
+- **Native Windows controls:** file pickers, recent files, menus, document outline, and unsaved-change dialogs.
 - **A focused workspace:** light and dark themes, focus mode, word count, and reading time.
+- **Code highlighting:** language-aware colors in live preview and source mode, with palettes for day and night.
 - **Reliable file handling:** atomic saves and preservation of the detected encoding and newline convention.
 - **Familiar editing:** undo/redo, formatting shortcuts, and find/replace.
 
-The welcome page is editable and initially unsaved. Choose **File > New** for a blank document.
+The welcome page is editable and starts unmodified. It only asks to save after you change its content. Choose **File > New** for a blank document.
+
+### Recent files
+
+**File > Recent files** remembers the last 10 successfully opened or saved documents, newest first. Reopening a file moves it to the top without creating a duplicate. Entries show the filename and folder, with the full path available as a tooltip.
+
+The list survives restarts. **Clear recent files** clears history without deleting documents. If a listed file has been moved or deleted, attempting to open it removes the stale entry and keeps the current document intact. Switching documents still asks about genuinely unsaved edits.
+
+### Night mode and code blocks
+
+Choose **View > Night mode** or click the moon/sun button in the toolbar. The charcoal palette applies to the editor, sidebar, window controls, and search panel. Your choice is remembered for the next launch.
+
+Add a language name after the opening code fence to enable syntax highlighting:
+
+````markdown
+```csharp
+// A small idea, ready to grow.
+public sealed class Note
+{
+    private readonly string title = "A fresh thought";
+    public int Count => 42;
+}
+```
+````
+
+Supported labels include `csharp` / `cs` / `c#`, `javascript` / `js`, `typescript` / `ts`, `json`, `html`, `css`, `python`, `sql`, `powershell`, `bash`, and `yaml`. Language parsers are bundled locally. Unknown or unlabelled fences remain plain text, and changing theme or editing mode preserves the Markdown and undo history.
 
 ## Getting started
 
@@ -73,11 +101,19 @@ Install [Inno Setup 6.3 or later](https://jrsoftware.org/isdl.php), then run wit
 
 This publishes a self-contained x64 Release build and compiles `installer/Marklane.iss`. The installer is written to `artifacts/installer/Marklane-<version>-win-x64-setup.exe`; its version comes from the published executable. If Inno Setup is installed in a custom location, pass `-IsccPath 'C:\path\to\ISCC.exe'`.
 
+Set the three-part release version (`1.0.0`) and author/copyright metadata in `src/Directory.Build.props`. The installer uses the same metadata and `x.x.x` version format.
+
 Setup requires administrator access and installs to Program Files, with Start menu and desktop shortcuts and an uninstaller. The desktop shortcut is selected by default and can be deselected during setup. The Marklane icon is used for shortcuts, the executable, the app window/taskbar, and setup. It bundles .NET and the Windows App SDK, installs the Visual C++ runtime, and installs the machine-wide WebView2 runtime if missing. Building requires internet access; installing requires internet access only when WebView2 needs to be downloaded. Target PCs do not need the .NET SDK or Node.js.
 
 Later installers upgrade the existing installation using a stable application ID. Uninstall preserves documents and the settings/WebView2 profile under `%LOCALAPPDATA%\Marklane`.
 
-The editable icon artwork is `src/Marklane/Assets/Marklane.svg`. After changing it, run `npm --prefix src/Marklane/Editor run icon` to regenerate the checked-in multi-resolution `.ico` (requires Microsoft Edge and the editor's npm dependencies).
+### Markdown file associations
+
+Leave **Register Marklane for Markdown files** selected during setup to add Marklane to **Open with** and **Default apps** for `.md`, `.markdown`, and `.mdown`. On the final setup page, select **Choose Marklane as your default Markdown editor in Windows Settings**, then choose Marklane for the desired extensions. On Windows 10, search for the extensions in Default apps; recent Windows 11 versions open Marklane's settings directly.
+
+Windows requires you to confirm the default-app choice. Once selected, double-clicking a Markdown file opens it in Marklane and Explorer uses the Marklane document icon. Uninstall removes Marklane's handler registration.
+
+The editable icon artwork is in `src/Marklane/Assets/Marklane.svg` and `MarklaneDocument.svg`. After changing either, run `npm --prefix src/Marklane/Editor run icon` to regenerate the checked-in multi-resolution `.ico` files (requires Microsoft Edge and the editor's npm dependencies).
 
 ## Keyboard shortcuts
 
@@ -101,7 +137,7 @@ The editable icon artwork is `src/Marklane/Assets/Marklane.svg`. After changing 
 - `installer/Marklane.iss`: Windows installer definition.
 - `build-installer.ps1`: self-contained publishing and installer build.
 
-Themes and WebView2 profile data live in `%LOCALAPPDATA%\Marklane`. Runtime dependency license notices are included in `Editor/THIRD-PARTY-NOTICES.txt` beside the built app.
+Themes, `recent-files.json`, and WebView2 profile data live in `%LOCALAPPDATA%\Marklane`. Runtime dependency license notices are included in `Editor/THIRD-PARTY-NOTICES.txt` beside the built app.
 
 Editor bundles, installed npm dependencies, build outputs, and installer artifacts are generated locally and excluded from Git. The npm lockfile is committed to keep dependency versions reproducible.
 
@@ -114,17 +150,18 @@ dotnet test tests/Marklane.Core.Tests/Marklane.Core.Tests.csproj
 npm --prefix src/Marklane/Editor test
 ```
 
-Browser tests use the installed Microsoft Edge through Playwright. They validate live rendering, source round trips, table editing, task undo, typing, formatting, search, outline and theme/focus state.
+Browser tests use the installed Microsoft Edge through Playwright. They validate live rendering, source round trips, table editing, task undo, typing, formatting, search, outline, theme/focus state, code-token colors, language aliases, offline highlighting, and editing inside code fences.
 
 To exercise the actual desktop application after building:
 
 ```powershell
 Push-Location src/Marklane/Editor
 node tests/native-smoke.mjs
+node tests/native-documents-smoke.mjs
 Pop-Location
 ```
 
-This launches a separate test instance with a scratch document and isolated WebView2 profile. It checks native open/save, source-mode bridging, the unsaved-close dialog, cancel and clean close. Its temporary debugging endpoint exists only for that test process.
+These checks launch separate test instances with scratch documents, settings/history isolated through `MARKLANE_DATA_DIRECTORY`, and isolated WebView2 profiles. They cover night/light mode, code highlighting, open/save, source-mode bridging, unchanged welcome documents, recent-file persistence and clearing, missing files, and save/cancel/discard behavior. Run the desktop checks sequentially because they share the Windows desktop. Their temporary debugging endpoints exist only for the test processes.
 
 ## Current scope
 
