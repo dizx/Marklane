@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>Marklane</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets/Marklane.ico</ApplicationIcon>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Editor\node_modules\**;Editor\dist\**</DefaultItemExcludes>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260921001" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.4654" />
+    <ProjectReference Include="../Marklane.Core/Marklane.Core.csproj" />
+    <Content Include="Editor/dist/index.html" CopyToOutputDirectory="PreserveNewest" Link="Editor/index.html" />
+    <Content Include="Editor/dist/editor.js" CopyToOutputDirectory="PreserveNewest" Link="Editor/editor.js" />
+    <Content Include="Editor/dist/editor.css" CopyToOutputDirectory="PreserveNewest" Link="Editor/editor.css" />
+    <Content Include="Editor/dist/THIRD-PARTY-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" Link="Editor/THIRD-PARTY-NOTICES.txt" />
+    <Content Update="Assets/Welcome.md" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="Assets/Marklane.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <EditorBuildInput Include="Editor/src/**/*;Editor/build.mjs;Editor/package.json;Editor/package-lock.json" />
+    <EditorBuildOutput Include="Editor/dist/index.html;Editor/dist/editor.js;Editor/dist/editor.css;Editor/dist/THIRD-PARTY-NOTICES.txt" />
+  </ItemGroup>
+  <!-- Keep IDE builds incremental; npm ci deletes folders that Visual Studio may have open. -->
+  <Target Name="RestoreEditorDependencies"
+          Condition="'$(SkipEditorBuild)' != 'true' and '$(DesignTimeBuild)' != 'true'"
+          Inputs="$(MSBuildProjectDirectory)/Editor/package.json;$(MSBuildProjectDirectory)/Editor/package-lock.json"
+          Outputs="$(MSBuildProjectDirectory)/Editor/node_modules/.marklane-restore.stamp;$(MSBuildProjectDirectory)/Editor/node_modules/.package-lock.json">
+    <Exec Command="npm install --include=dev --no-audit --no-fund" WorkingDirectory="$(MSBuildProjectDirectory)/Editor" />
+    <Touch Files="$(MSBuildProjectDirectory)/Editor/node_modules/.marklane-restore.stamp" AlwaysCreate="true" />
+  </Target>
+  <Target Name="BuildEditor" BeforeTargets="PrepareForBuild"
+          DependsOnTargets="RestoreEditorDependencies"
+          Condition="'$(SkipEditorBuild)' != 'true' and '$(DesignTimeBuild)' != 'true'"
+          Inputs="@(EditorBuildInput);$(MSBuildProjectDirectory)/Editor/node_modules/.marklane-restore.stamp"
+          Outputs="@(EditorBuildOutput)">
+    <Exec Command="npm run build" WorkingDirectory="$(MSBuildProjectDirectory)/Editor" />
+    <!-- Copied static assets can retain their source timestamps. -->
+    <Touch Files="@(EditorBuildOutput)" />
+  </Target>
+  <!-- Unpackaged publishing must carry the application's compiled XAML resources. -->
+  <Target Name="PublishWinUIResources" AfterTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <_MarklaneWinUIResource Include="$(TargetDir)**\*.xbf;$(TargetDir)$(AssemblyName).pri" />
+      <ResolvedFileToPublish Include="@(_MarklaneWinUIResource)">
+        <RelativePath>%(_MarklaneWinUIResource.RecursiveDir)%(_MarklaneWinUIResource.Filename)%(_MarklaneWinUIResource.Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+</Project>
