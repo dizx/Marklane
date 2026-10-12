@@ -23,12 +23,19 @@ public sealed partial class MainWindow : Window
         : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Marklane");
     private readonly string settingsPath;
     private readonly RecentFilesStore recentFiles;
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer fileCheckTimer;
+    private DocumentFileChange? pendingFileChange;
+    private bool checkingFile, closed;
 
     public MainWindow()
     {
         settingsPath = Path.Combine(appDataDirectory, "theme.txt");
         recentFiles = new RecentFilesStore(Path.Combine(appDataDirectory, "recent-files.json"));
         InitializeComponent();
+        fileCheckTimer = DispatcherQueue.CreateTimer();
+        fileCheckTimer.Interval = TimeSpan.FromSeconds(1);
+        fileCheckTimer.Tick += OnFileCheck;
+        Closed += (_, _) => { closed = true; fileCheckTimer.Stop(); };
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "Marklane.ico"));
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBar);
@@ -110,6 +117,7 @@ public sealed partial class MainWindow : Window
                     LoadingPanel.Visibility = Visibility.Collapsed;
                     ApplyTheme(Root.RequestedTheme == ElementTheme.Dark);
                     SendDocument();
+                    fileCheckTimer.Start();
                     break;
                 case "change":
                     document.Text = root.GetProperty("text").GetString() ?? "";
@@ -288,10 +296,74 @@ public sealed partial class MainWindow : Window
             if (file is null) return false;
             path = file.Path;
         }
+        if (string.Equals(Path.GetFullPath(path), document.FilePath, StringComparison.OrdinalIgnoreCase)
+            && await document.GetExternalChangeAsync() is { } change)
+        {
+            await PromptForFileChangeAsync(change);
+            // Let the user review the chosen version before a second Save writes to disk.
+            return false;
+        }
         await document.SaveAsync(path);
         UpdateStatus();
         await RecordRecentFileAsync(path);
         return true;
+    }
+
+    private async void OnFileCheck(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args)
+    {
+        if (!ready || busy || checkingFile || closed) return;
+        checkingFile = true;
+        try
+        {
+            var change = await document.GetExternalChangeAsync();
+            if (busy || closed) return;
+            if (change is null) { pendingFileChange = null; return; }
+            // Require two matching samples to coalesce save bursts and temporary rename/delete events.
+            if (pendingFileChange is null || !change.HasSameVersionAs(pendingFileChange))
+            {
+                pendingFileChange = change;
+                return;
+            }
+            busy = true;
+            try
+            {
+                await SynchronizeAsync();
+                await PromptForFileChangeAsync(change);
+            }
+            catch (Exception error) { if (!closed) await ShowErrorAsync(error); }
+            finally { busy = false; }
+        }
+        // A writer may temporarily lock the file. Retry at the next tick without interrupting editing.
+        catch (IOException) { pendingFileChange = null; }
+        catch (UnauthorizedAccessException) { pendingFileChange = null; }
+        finally { checkingFile = false; }
+    }
+
+    private async Task PromptForFileChangeAsync(DocumentFileChange change)
+    {
+        pendingFileChange = null;
+        var dirty = document.IsDirty;
+        var message = change.Exists
+            ? $"{document.Name} was changed by another application. Reload the version from disk?" +
+                (dirty ? "\n\nReloading will discard your unsaved changes." : "") +
+                "\n\nKeeping your version leaves the file on disk unchanged until you save again."
+            : $"{document.Name} was deleted or moved. Your text is still available here. " +
+                "Use Save to recreate the file, or Save as to choose another location.";
+        var result = await new ContentDialog
+        {
+            XamlRoot = Root.XamlRoot,
+            RequestedTheme = Root.RequestedTheme,
+            Title = change.Exists ? "File changed on disk" : "File removed from disk",
+            Content = message,
+            PrimaryButtonText = change.Exists ? "Reload" : "Keep editing",
+            CloseButtonText = change.Exists ? "Keep my changes" : "",
+            DefaultButton = change.Exists && dirty ? ContentDialogButton.Close : ContentDialogButton.Primary
+        }.ShowAsync();
+        if (closed) return;
+        var reload = change.Exists && result == ContentDialogResult.Primary;
+        if (!document.ResolveExternalChange(change, reload)) return;
+        if (reload) SendDocument();
+        else UpdateStatus();
     }
 
     private async Task<bool> ConfirmDiscardAsync()

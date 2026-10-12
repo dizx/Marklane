@@ -2,7 +2,7 @@
 import { chromium } from "@playwright/test";
 import { spawn, execFileSync } from "node:child_process";
 import { createServer } from "node:net";
-import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rename, rm } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import assert from "node:assert/strict";
 
@@ -115,6 +115,83 @@ try {
   await page.keyboard.press("Control+/");
   await page.waitForFunction(() => !document.body.classList.contains("source-mode"));
   console.log("PASS native source-mode command round trip");
+
+  const invokeNative = name => powershell(automation + `$buttons = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, '${name}'))); $button = $buttons | Where-Object { $_.Current.AutomationId -ne 'Close' } | Select-Object -First 1; ([System.Windows.Automation.InvokePattern]$button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke();`);
+  const waitForNative = async (name, visible = true) => {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      if (nativeNames().includes(name) === visible) return;
+      await delay(150);
+    }
+    assert.fail(`Native control ${name} should be ${visible ? "visible" : "hidden"}`);
+  };
+  await delay(2200);
+  assert.ok(!nativeNames().includes("File changed on disk"), "Marklane's own save must not trigger reload");
+  await page.evaluate(() => window.chrome.webview.postMessage({ type: "command", command: "about" }));
+  await waitForNative("About Marklane");
+  const externalText = "# External edit\n\nReloaded version.\n";
+  await writeFile(documentPath, externalText);
+  await delay(2200);
+  assert.ok(!nativeNames().includes("File changed on disk"), "File changes must wait for the existing dialog");
+  invokeNative("Close");
+  await waitForNative("File changed on disk");
+  invokeNative("Reload");
+  await page.waitForFunction(text => window.marklane.getText() === text, externalText);
+  await waitForNative("File changed on disk", false);
+  console.log("PASS external update waits for dialogs and reloads text");
+
+  await page.locator(".cm-content").focus();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.insertText("Local edits to keep\n");
+  const localText = await page.evaluate(() => window.marklane.getText());
+  const replacementPath = join(directory, "Replacement.tmp");
+  const replacementText = "# Atomic replacement\n\nFrom another editor.\n";
+  await writeFile(replacementPath, replacementText);
+  await rename(replacementPath, documentPath);
+  await waitForNative("File changed on disk");
+  assert.ok(nativeNames().some(name => name.includes("Reloading will discard your unsaved changes.")));
+  invokeNative("Keep my changes");
+  await waitForNative("File changed on disk", false);
+  assert.equal(await page.evaluate(() => window.marklane.getText()), localText);
+  assert.equal(await readFile(documentPath, "utf8"), replacementText);
+  await delay(2200);
+  assert.ok(!nativeNames().includes("File changed on disk"), "Keeping text must acknowledge that disk version");
+  await writeFile(documentPath, "# Another external edit\n");
+  await waitForNative("File changed on disk");
+  invokeNative("Reload");
+  await page.waitForFunction(() => window.marklane.getText() === "# Another external edit\n");
+  console.log("PASS atomic replacement, unsaved-change warning, keep without overwriting, and later reload");
+
+  await rm(documentPath);
+  await waitForNative("File removed from disk");
+  invokeNative("Keep editing");
+  await waitForNative("File removed from disk", false);
+  assert.equal(await page.evaluate(() => window.marklane.getText()), "# Another external edit\n");
+  await page.locator(".cm-content").focus();
+  await page.keyboard.press("Control+s");
+  for (let attempt = 0; attempt < 40; attempt++) {
+    try { if (await readFile(documentPath, "utf8") === "# Another external edit\n") break; } catch {}
+    await delay(100);
+  }
+  assert.equal(await readFile(documentPath, "utf8"), "# Another external edit\n");
+  await delay(2200);
+  assert.ok(!nativeNames().includes("File changed on disk"));
+  console.log("PASS deleted file preserves text and can be recreated with Save");
+
+  // Save must also check immediately, even before the background timer observes a change.
+  await writeFile(documentPath, "External update just before save\n");
+  await page.evaluate(() => window.chrome.webview.postMessage({ type: "command", command: "save" }));
+  await waitForNative("File changed on disk");
+  assert.equal(await readFile(documentPath, "utf8"), "External update just before save\n");
+  invokeNative("Keep my changes");
+  await waitForNative("File changed on disk", false);
+  assert.equal(await readFile(documentPath, "utf8"), "External update just before save\n");
+  await page.evaluate(() => window.chrome.webview.postMessage({ type: "command", command: "save" }));
+  for (let attempt = 0; attempt < 40; attempt++) {
+    if (await readFile(documentPath, "utf8") === "# Another external edit\n") break;
+    await delay(100);
+  }
+  assert.equal(await readFile(documentPath, "utf8"), "# Another external edit\n");
+  console.log("PASS Save detects pending disk updates before overwriting");
 
   await page.keyboard.insertText("Unsaved edit");
   powershell(`(Get-Process -Id ${app.pid}).CloseMainWindow() | Out-Null`);

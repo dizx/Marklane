@@ -68,7 +68,10 @@ async function recentMenu() {
 async function openRecent(index, expected) {
   await recentMenu();
   invoke(`RecentFile${index}`, "AutomationId");
-  if (expected !== undefined) await page.waitForFunction(text => window.marklane.getText() === text, expected);
+  if (expected !== undefined) {
+    await page.waitForFunction(text => window.marklane.getText() === text, expected);
+    await waitFor(() => !names().includes("Recent files"), "Recent-files menu did not finish closing");
+  }
 }
 
 async function dismissDialog(button) {

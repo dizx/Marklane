@@ -12,6 +12,7 @@ Copyright (c) 2026 Morten Aasheim.
 - **A focused workspace:** light and dark themes, focus mode, word count, and reading time.
 - **Code highlighting:** language-aware colors in live preview and source mode, with palettes for day and night.
 - **Reliable file handling:** atomic saves and preservation of the detected encoding and newline convention.
+- **External file changes:** detects updates from other applications and offers to reload or keep your work.
 - **Familiar editing:** undo/redo, formatting shortcuts, and find/replace.
 
 The welcome page is editable and starts unmodified. It only asks to save after you change its content. Choose **File > New** for a blank document.
@@ -21,6 +22,12 @@ The welcome page is editable and starts unmodified. It only asks to save after y
 **File > Recent files** remembers the last 10 successfully opened or saved documents, newest first. Reopening a file moves it to the top without creating a duplicate. Entries show the filename and folder, with the full path available as a tooltip.
 
 The list survives restarts. **Clear recent files** clears history without deleting documents. If a listed file has been moved or deleted, attempting to open it removes the stale entry and keeps the current document intact. Switching documents still asks about genuinely unsaved edits.
+
+### External file changes
+
+Marklane checks the open file in the background and prompts after a change settles. **Reload** replaces the editor content with the detected disk version, including its encoding and newline style. If you have unsaved edits, the dialog warns that reloading will discard them. **Keep my changes** preserves your text and marks it unsaved; the same disk version won't prompt again.
+
+Marklane's own saves and identical rewrites don't trigger the dialog. Changes wait while another dialog or file operation is active. If the file is deleted or moved, **Keep editing** preserves the document so you can recreate it with Save or choose another location with Save as. Saving also checks for unreviewed disk changes: resolve the dialog, then save again if you want to overwrite with your version.
 
 ### Focus mode
 
@@ -166,10 +173,10 @@ node tests/native-documents-smoke.mjs
 Pop-Location
 ```
 
-These checks launch separate test instances with scratch documents, settings/history isolated through `MARKLANE_DATA_DIRECTORY`, and isolated WebView2 profiles. They cover night/light mode, code highlighting, open/save, source-mode bridging, unchanged welcome documents, recent-file persistence and clearing, missing files, and save/cancel/discard behavior. Run the desktop checks sequentially because they share the Windows desktop. Their temporary debugging endpoints exist only for the test processes.
+These checks launch separate test instances with scratch documents, settings/history isolated through `MARKLANE_DATA_DIRECTORY`, and isolated WebView2 profiles. They cover night/light mode, code highlighting, open/save, source-mode bridging, unchanged welcome documents, recent-file persistence and clearing, missing files, save/cancel/discard behavior, and external updates/replacements/deletion with reload or keep choices. Run the desktop checks sequentially because they share the Windows desktop. Their temporary debugging endpoints exist only for the test processes.
 
 ## Current scope
 
-This is an initial single-document editor. Images, math, diagrams, HTML blocks and advanced Markdown extensions remain source text. There is no folder browser, PDF export, autosave/crash recovery, external-file-change detection, or rich-HTML clipboard conversion yet. Links are styled but do not navigate out of the editor. Large-file performance and IME/accessibility behavior beyond the checks above have not been comprehensively validated.
+This is an initial single-document editor. Images, math, diagrams, HTML blocks and advanced Markdown extensions remain source text. There is no folder browser, PDF export, autosave/crash recovery, or rich-HTML clipboard conversion yet. Links are styled but do not navigate out of the editor. Large-file performance and IME/accessibility behavior beyond the checks above have not been comprehensively validated.
 
 UTF-8 and BOM-marked UTF-16/UTF-32 documents are supported. Saves preserve the detected encoding and newline convention; mixed newline files are normalized to one convention.
